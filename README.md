@@ -23,13 +23,13 @@ docker run --rm \
   -e PORTIA_API_KEY=your-api-key \
   -e PORTIA_ORG_ID=Personal \
   -e GMAIL_TO=your-email@example.com \
-  vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday
+  vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli digest --yesterday
 
 # Or use environment file
-docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli digest --yesterday
 
 # Preview email without sending
-docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday --preview-only
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli digest --yesterday --preview-only
 ```
 
 ### Option 2: Local Setup

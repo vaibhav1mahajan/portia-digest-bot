@@ -362,7 +362,7 @@ def digest(
         
         # Step 3: Format email
         rprint("[yellow]📧 Step 3: Formatting email...[/yellow]")
-        email_body = EmailFormatter.format_email_body(analysis, summary)
+        email_body = EmailFormatter.format_email_body_from_data(analysis, summary, since_dt.strftime('%Y-%m-%d'))
         
         if preview_only:
             rprint("[green]✅ Email preview:[/green]")

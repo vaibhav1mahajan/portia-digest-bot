@@ -10,7 +10,7 @@ class EmailFormatter:
     
     @staticmethod
     def format_email_body(analysis_file: str, summary_file: str, date: str) -> str:
-        """Format a clean, concise email body."""
+        """Format a clean, concise email body from files."""
         
         # Read analysis data
         with open(analysis_file, 'r') as f:
@@ -22,6 +22,21 @@ class EmailFormatter:
         
         # Extract the clean summary (remove logs and extra content)
         clean_summary = EmailFormatter._extract_clean_summary(summary_content)
+        
+        return EmailFormatter._create_email_body(analysis, clean_summary, date)
+    
+    @staticmethod
+    def format_email_body_from_data(analysis: Dict[str, Any], summary: str, date: str) -> str:
+        """Format a clean, concise email body from data objects."""
+        
+        # Extract the clean summary (remove logs and extra content)
+        clean_summary = EmailFormatter._extract_clean_summary(summary)
+        
+        return EmailFormatter._create_email_body(analysis, clean_summary, date)
+    
+    @staticmethod
+    def _create_email_body(analysis: Dict[str, Any], clean_summary: str, date: str) -> str:
+        """Create email body from analysis data and clean summary."""
         
         # Get key metrics
         total_runs = analysis.get('total_runs', 0)
