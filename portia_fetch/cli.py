@@ -17,6 +17,7 @@ from .mail_preview import MailPreview
 from .email_sender import PortiaEmailSender
 from .email_formatter import EmailFormatter
 import logging
+import os
 
 app = typer.Typer(help="Portia Digest Bot - Fetch, analyze, and summarize plan runs")
 console = Console()
@@ -375,7 +376,18 @@ def digest(
         if send_email:
             rprint("[yellow]📤 Step 4: Sending email...[/yellow]")
             email_sender = PortiaEmailSender()
-            success = email_sender.send_digest_email(email_body)
+            
+            # Get recipient email from environment
+            to_email = os.getenv('GMAIL_TO')
+            if not to_email:
+                rprint("[red]❌ GMAIL_TO environment variable not set[/red]")
+                raise typer.Exit(1)
+            
+            success = email_sender.send_email(
+                to_email=to_email,
+                subject=f"Portia Daily Digest - {since_dt.strftime('%Y-%m-%d')}",
+                body=email_body
+            )
             
             if success:
                 rprint("[green]✅ Digest email sent successfully![/green]")
