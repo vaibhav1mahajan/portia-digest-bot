@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "🚀 Starting daily digest send..."
+
+# Set up virtual environment path
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+VENV_PATH="${PROJECT_DIR}/venv"
+
+# Activate virtual environment if it exists
+if [ -d "$VENV_PATH" ]; then
+    echo "🔧 Activating virtual environment..."
+    source "${VENV_PATH}/bin/activate"
+    echo "✅ Virtual environment activated"
+else
+    echo "⚠️  Virtual environment not found at ${VENV_PATH}"
+    echo "   Please run: python -m venv venv && source venv/bin/activate && pip install -e ."
+    exit 1
+fi
+
+# Load environment if .env exists
+if [ -f .env ]; then
+    # Load .env file, ignoring comments and empty lines
+    set -a
+    source .env
+    set +a
+    echo "✅ Loaded .env file"
+else
+    echo "⚠️  No .env file found, using environment variables"
+fi
+
+# Check required environment variables with better error messages
+PORTIA_API_KEY="${PORTIA_API_KEY:-}"
+PORTIA_ORG_ID="${PORTIA_ORG_ID:-}"
+# Use GMAIL_TO as the primary email variable since that's what's in your .env
+EMAIL_TO="${GMAIL_TO:-${DIGEST_TO:-}}"
+
+if [ -z "$PORTIA_API_KEY" ]; then
+    echo "❌ PORTIA_API_KEY is required"
+    echo "   Add it to your .env file: PORTIA_API_KEY=prt-..."
+    exit 1
+fi
+
+if [ -z "$PORTIA_ORG_ID" ]; then
+    echo "❌ PORTIA_ORG_ID is required" 
+    echo "   Add it to your .env file: PORTIA_ORG_ID=your-org-id"
+    echo "   Note: 'Personal' is valid for personal accounts"
+    exit 1
+fi
+
+if [ -z "$EMAIL_TO" ]; then
+    echo "❌ Email recipient is required"
+    echo "   Add it to your .env file: GMAIL_TO=your-email@domain.com"
+    exit 1
+fi
+
+echo "✅ Using API Key: ${PORTIA_API_KEY:0:12}..."
+echo "✅ Using Org ID: $PORTIA_ORG_ID"
+echo "✅ Sending to: $EMAIL_TO"
+
+# Default to yesterday's data
+YESTERDAY=$(date -u -d '1 day ago' '+%Y-%m-%d')
+SUBJECT_PREFIX="${DIGEST_SUBJECT_PREFIX:-Portia Daily Digest}"
+
+echo "📊 Generating analysis for ${YESTERDAY}..."
+
+# Create temp directory
+TEMP_DIR=$(mktemp -d)
+ANALYSIS_FILE="${TEMP_DIR}/analysis.json"
+SUMMARY_FILE="${TEMP_DIR}/summary.txt"
+
+# Cleanup function
+cleanup() {
+    rm -rf "${TEMP_DIR}"
+}
+trap cleanup EXIT
+
+# Get analysis
+echo "🔍 Running analysis..."
+if ! portia-fetch analyze --yesterday --with-tools --json 2>/dev/null | grep -E '^\s*{' -A 1000 > "${ANALYSIS_FILE}"; then
+    echo "❌ Failed to generate analysis"
+    exit 1
+fi
+
+if [ ! -s "${ANALYSIS_FILE}" ]; then
+    echo "❌ Analysis file is empty"
+    exit 1
+fi
+
+# Get summary  
+echo "🤖 Generating AI summary..."
+if ! portia-fetch summarize --yesterday --with-tools > "${SUMMARY_FILE}"; then
+    echo "❌ Failed to generate summary"
+    exit 1
+fi
+
+if [ ! -s "${SUMMARY_FILE}" ]; then
+    echo "❌ Summary file is empty"
+    exit 1
+fi
+
+# Read total runs for subject
+TOTAL_RUNS=$(jq -r '.total_runs // 0' < "${ANALYSIS_FILE}")
+SUBJECT="${SUBJECT_PREFIX} - ${TOTAL_RUNS} runs on ${YESTERDAY}"
+
+# Create clean email body using Python formatter
+BODY_FILE="${TEMP_DIR}/body.txt"
+python3 -c "
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath('${TEMP_DIR}')))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath('${TEMP_DIR}'))))
+
+from portia_fetch.email_formatter import EmailFormatter
+
+try:
+    body = EmailFormatter.format_email_body('${ANALYSIS_FILE}', '${SUMMARY_FILE}', '${YESTERDAY}')
+    with open('${BODY_FILE}', 'w') as f:
+        f.write(body)
+    print('✅ Clean email body generated')
+except Exception as e:
+    print(f'❌ Failed to format email: {e}')
+    # Fallback to simple format
+    with open('${BODY_FILE}', 'w') as f:
+        f.write(f'''Portia Daily Digest
+Date: ${YESTERDAY}
+
+Total runs: ${TOTAL_RUNS}
+
+Generated: $(date -u '+%Y-%m-%d %H:%M UTC')
+''')
+"
+
+echo "📧 Sending email via Portia Gmail tool..."
+
+# Send email using Portia SDK and Gmail tool
+echo "📧 Sending email via Portia SDK and Gmail tool..."
+
+# Create a Python script to send the email
+TEMP_EMAIL_SCRIPT="${TEMP_DIR}/send_email.py"
+cat > "${TEMP_EMAIL_SCRIPT}" << 'PYTHON_SCRIPT'
+#!/usr/bin/env python3
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from portia_fetch.email_sender import PortiaEmailSender
+
+def main():
+    # Read email details from environment
+    to_email = os.getenv('EMAIL_TO')
+    subject = os.getenv('SUBJECT')
+    body_file = os.getenv('BODY_FILE')
+    
+    if not all([to_email, subject, body_file]):
+        print("❌ Missing email details")
+        sys.exit(1)
+    
+    # Read the email body
+    try:
+        with open(body_file, 'r') as f:
+            body = f.read()
+    except Exception as e:
+        print(f"❌ Failed to read email body: {e}")
+        sys.exit(1)
+    
+    # Send the email
+    try:
+        with PortiaEmailSender() as sender:
+            success = sender.send_email(to_email, subject, body)
+            if success:
+                print("✅ Email sent successfully!")
+                sys.exit(0)
+            else:
+                print("❌ Failed to send email")
+                sys.exit(1)
+    except Exception as e:
+        print(f"❌ Email sending error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+PYTHON_SCRIPT
+
+chmod +x "${TEMP_EMAIL_SCRIPT}"
+
+# Set environment variables for the Python script
+export EMAIL_TO="${EMAIL_TO}"
+export SUBJECT="${SUBJECT}"
+export BODY_FILE="${BODY_FILE}"
+
+# Run the email sending script
+if python3 "${TEMP_EMAIL_SCRIPT}"; then
+    echo "✅ Email sent successfully via Portia Gmail tool!"
+else
+    echo "❌ Failed to send email via Portia Gmail tool"
+    echo "📋 Email content that failed to send:"
+    echo "Subject: ${SUBJECT}"
+    echo "To: ${EMAIL_TO}"
+    echo "Body:"
+    cat "${BODY_FILE}"
+    echo ""
+    echo "💡 Alternative options:"
+    echo "   1. Use the Portia web interface to send this content"
+    echo "   2. Copy the content above and send manually"
+    exit 1
+fi
+
+echo "🎉 Daily digest process completed!"

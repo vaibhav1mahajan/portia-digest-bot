@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  portia-digest:
+    build: .
+    container_name: portia-digest-bot
+    environment:
+      - PORTIA_API_KEY=${PORTIA_API_KEY}
+      - PORTIA_ORG_ID=${PORTIA_ORG_ID:-Personal}
+      - GMAIL_TO=${GMAIL_TO}
+      - DIGEST_SUBJECT_PREFIX=${DIGEST_SUBJECT_PREFIX:-Portia Daily Digest}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    command: ["python", "-m", "portia_fetch.cli", "analyze", "--yesterday"]
+    
+  # Optional: Cron service for automated runs
+  portia-cron:
+    build: .
+    container_name: portia-digest-cron
+    environment:
+      - PORTIA_API_KEY=${PORTIA_API_KEY}
+      - PORTIA_ORG_ID=${PORTIA_ORG_ID:-Personal}
+      - GMAIL_TO=${GMAIL_TO}
+      - DIGEST_SUBJECT_PREFIX=${DIGEST_SUBJECT_PREFIX:-Portia Daily Digest}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo '0 9 * * * cd /app && python -m portia_fetch.cli analyze --yesterday && python -m portia_fetch.cli summarize --yesterday' > /etc/crontabs/root &&
+        crond -f
+      "
