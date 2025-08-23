@@ -18,15 +18,18 @@ Perfect for developers, teams, and anyone using Portia who wants automated insig
 
 ### Option 1: Docker (Recommended)
 ```bash
-# Pull and run with environment variables
+# Complete digest workflow (analyze + summarize + send email)
 docker run --rm \
   -e PORTIA_API_KEY=your-api-key \
   -e PORTIA_ORG_ID=Personal \
   -e GMAIL_TO=your-email@example.com \
-  vaibhavmahajan2257/portia-digest-bot:latest
+  vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday
 
 # Or use environment file
-docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday
+
+# Preview email without sending
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest digest --yesterday --preview-only
 ```
 
 ### Option 2: Local Setup
@@ -69,11 +72,12 @@ portia-fetch summarize --yesterday
 
 ### Docker Commands
 ```bash
-# Run analysis
-docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest portia-fetch analyze --yesterday
+# Complete digest workflow
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli digest --yesterday
 
-# Generate summary
-docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest portia-fetch summarize --yesterday
+# Individual commands
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli analyze --yesterday
+docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest python -m portia_fetch.cli summarize --yesterday
 ```
 
 ## 🔄 Automation
@@ -107,8 +111,18 @@ docker run --rm --env-file .env vaibhavmahajan2257/portia-digest-bot:latest port
 ## 🛠️ CLI Commands
 
 ```bash
+# Complete digest workflow (analyze + summarize + send email)
+portia-fetch digest [--yesterday|--today|--since DATE|--until DATE]
+
+# Individual commands
 portia-fetch analyze [--yesterday|--today|--since DATE|--until DATE]
 portia-fetch summarize [--yesterday|--today|--since DATE|--until DATE]
+portia-fetch preview-mail [--yesterday|--today|--since DATE|--until DATE]
+
+# Preview email without sending
+portia-fetch digest --yesterday --preview-only
+
+# Get help
 portia-fetch --help
 ```
 

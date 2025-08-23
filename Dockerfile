@@ -19,4 +19,4 @@ RUN pip install -e .
 ENV PYTHONPATH=/app
 
 # Default command
-CMD ["python", "-m", "portia_fetch.cli", "--help"]
+CMD ["python", "-m", "portia_fetch.cli"]

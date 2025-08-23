@@ -14,6 +14,8 @@ from .client import PortiaClient
 from .analyzer import PlanRunAnalyzer
 from .summarizer import DigestSummarizer
 from .mail_preview import MailPreview
+from .email_sender import PortiaEmailSender
+from .email_formatter import EmailFormatter
 import logging
 
 app = typer.Typer(help="Portia Digest Bot - Fetch, analyze, and summarize plan runs")
@@ -305,6 +307,90 @@ def preview_mail(
     
     preview = MailPreview()
     preview.print_preview(since_dt, until_dt, with_tools)
+
+
+@app.command("digest")
+def digest(
+    today: bool = typer.Option(False, help="Generate digest for today's window"),
+    yesterday: bool = typer.Option(False, help="Generate digest for yesterday's window"),
+    since: Optional[str] = typer.Option(None, help="Start time (ISO format)"),
+    until: Optional[str] = typer.Option(None, help="End time (ISO format)"),
+    with_tools: bool = typer.Option(False, help="Include tool usage analysis"),
+    send_email: bool = typer.Option(True, help="Send email digest"),
+    preview_only: bool = typer.Option(False, help="Preview email without sending")
+):
+    """Complete digest workflow: analyze, summarize, and send email."""
+    
+    since_dt = None
+    until_dt = None
+    
+    if today:
+        now = datetime.now(timezone.utc)
+        since_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        until_dt = now
+    elif yesterday:
+        yesterday_dt = datetime.now(timezone.utc) - timedelta(days=1)
+        since_dt = yesterday_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        until_dt = since_dt + timedelta(days=1)
+    elif since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+            if until:
+                until_dt = datetime.fromisoformat(until.replace('Z', '+00:00'))
+        except ValueError as e:
+            rprint(f"[red]❌ Invalid date format: {e}[/red]")
+            raise typer.Exit(1)
+    else:
+        # Default to yesterday
+        yesterday_dt = datetime.now(timezone.utc) - timedelta(days=1)
+        since_dt = yesterday_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        until_dt = since_dt + timedelta(days=1)
+    
+    rprint(f"[blue]🚀 Starting digest workflow for {since_dt.strftime('%Y-%m-%d %H:%M')} to {until_dt.strftime('%Y-%m-%d %H:%M')} UTC[/blue]")
+    
+    try:
+        # Step 1: Analyze
+        rprint("[yellow]📊 Step 1: Analyzing plan runs...[/yellow]")
+        with get_client() as client:
+            analyzer = PlanRunAnalyzer(client)
+            analysis = analyzer.analyze_window(since_dt, until_dt, with_tools)
+        
+        # Step 2: Summarize
+        rprint("[yellow]🤖 Step 2: Generating AI summary...[/yellow]")
+        summarizer = DigestSummarizer()
+        summary = summarizer.summarize_analysis(analysis)
+        
+        # Step 3: Format email
+        rprint("[yellow]📧 Step 3: Formatting email...[/yellow]")
+        email_body = EmailFormatter.format_email_body(analysis, summary)
+        
+        if preview_only:
+            rprint("[green]✅ Email preview:[/green]")
+            print("\n" + "="*50)
+            print(email_body)
+            print("="*50)
+            return
+        
+        # Step 4: Send email
+        if send_email:
+            rprint("[yellow]📤 Step 4: Sending email...[/yellow]")
+            email_sender = PortiaEmailSender()
+            success = email_sender.send_digest_email(email_body)
+            
+            if success:
+                rprint("[green]✅ Digest email sent successfully![/green]")
+            else:
+                rprint("[red]❌ Failed to send digest email[/red]")
+                raise typer.Exit(1)
+        else:
+            rprint("[green]✅ Digest workflow completed (email sending disabled)[/green]")
+            print("\n" + "="*50)
+            print(email_body)
+            print("="*50)
+            
+    except Exception as e:
+        rprint(f"[red]❌ Digest workflow failed: {e}[/red]")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
