@@ -316,7 +316,7 @@ def digest(
     yesterday: bool = typer.Option(False, help="Generate digest for yesterday's window"),
     since: Optional[str] = typer.Option(None, help="Start time (ISO format)"),
     until: Optional[str] = typer.Option(None, help="End time (ISO format)"),
-    with_tools: bool = typer.Option(False, help="Include tool usage analysis"),
+    with_tools: bool = typer.Option(True, help="Include tool usage analysis"),
     send_email: bool = typer.Option(True, help="Send email digest"),
     preview_only: bool = typer.Option(False, help="Preview email without sending")
 ):
