@@ -78,7 +78,7 @@ def get_plan(plan_id: str = typer.Argument(help="Plan ID to retrieve")):
     with get_client() as client:
         try:
             plan = client.get_plan(plan_id)
-            print(json.dumps(plan.dict(), indent=2, default=str))
+            print(json.dumps(plan.model_dump(), indent=2, default=str))
         except Exception as e:
             rprint(f"[red]❌ Failed to get plan: {e}[/red]")
             raise typer.Exit(1)
@@ -144,7 +144,7 @@ def get_plan_run(run_id: str = typer.Argument(help="Plan run ID to retrieve")):
     with get_client() as client:
         try:
             run = client.get_plan_run(run_id)
-            print(json.dumps(run.dict(), indent=2, default=str))
+            print(json.dumps(run.model_dump(), indent=2, default=str))
         except Exception as e:
             rprint(f"[red]❌ Failed to get plan run: {e}[/red]")
             raise typer.Exit(1)
